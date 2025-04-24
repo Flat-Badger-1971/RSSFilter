@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using RSSFilter.Models;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -33,14 +34,14 @@ public class RSSProcessingIntegrationTests
 
         _loggerOptions = Options.Create(logOptions);
 
-        // Set up RSS filter options
+        // Set up RSS filter options with both TagSplit and TagCleanup
         RSSFilterOptions filterOptions = new RSSFilterOptions
         {
             InputSource = "https://example.com/rss",
             TagsToRemove = ["guid", "pubDate"],
             CleanupTags = true,
-            TagCleanupSettings =
-            [
+            TagSplit = [],
+            TagCleanup = [
                 new TagCleanupOptions
                 {
                     TagName = "title",
@@ -117,6 +118,123 @@ public class RSSProcessingIntegrationTests
 
         Assert.True(File.Exists(monitorLogPath));
         Assert.True(File.Exists(updateLogPath));
+    }
+    
+    [Fact]
+    public async Task RSSProcessingPipeline_ShouldApplyTagSplit()
+    {
+        // Arrange
+        // Create options with TagSplit
+        RSSFilterOptions tagSplitOptions = new RSSFilterOptions
+        {
+            InputSource = "https://example.com/rss",
+            TagsToRemove = [],
+            CleanupTags = true,
+            TagSplit = [
+                new TagSplitOptions
+                {
+                    TagName = "title",
+                    SplitPattern = @"(.+?)S(\d{2})E\d{2}.*",
+                    NewTags = new Dictionary<string, string>
+                    {
+                        { "title", "$1" },
+                        { "season", "Season $2" }
+                    }
+                }
+            ]
+        };
+        
+        IOptions<RSSFilterOptions> options = Options.Create(tagSplitOptions);
+        
+        FileLoggerFactory loggerFactory = new FileLoggerFactory(_loggerOptions);
+        RSSFeedUpdate feedUpdate = new RSSFeedUpdate(loggerFactory);
+        TestableRSSMonitorService monitorService = new TestableRSSMonitorService(feedUpdate, options, loggerFactory);
+
+        // Set up a test RSS feed with content for splitting
+        string testFeed = @"
+            <rss version='2.0'>
+                <channel>
+                    <title>Test Split Feed</title>
+                    <item>
+                        <title>Show Name S01E05 720p</title>
+                    </item>
+                    <item>
+                        <title>Another Show S02E14 1080p</title>
+                    </item>
+                </channel>
+            </rss>";
+
+        monitorService.SetupTestRssFeed(testFeed);
+
+        // Act
+        await monitorService.TestSingleProcessingCycle(CancellationToken.None);
+        string processedFeed = feedUpdate.GetLatestFeed();
+
+        // Assert
+        Assert.NotEmpty(processedFeed);
+        
+        // Check that the TagSplit was applied - the title should be updated
+        Assert.Contains("<title>Show Name</title>", processedFeed);
+        Assert.Contains("<title>Another Show</title>", processedFeed);
+        
+        // Check that new season tags were created
+        Assert.Contains("<season>Season 01</season>", processedFeed);
+        Assert.Contains("<season>Season 02</season>", processedFeed);
+    }
+    
+    [Fact]
+    public async Task RSSProcessingPipeline_ShouldApplyTagCleanup()
+    {
+        // Arrange
+        // Create options with just TagCleanup
+        RSSFilterOptions tagCleanupOptions = new RSSFilterOptions
+        {
+            InputSource = "https://example.com/rss",
+            TagsToRemove = [],
+            CleanupTags = true,
+            TagCleanup = [
+                new TagCleanupOptions
+                {
+                    TagName = "description",
+                    CleanupPattern = @"\s(?:\d{3,4}p)|(?:RERIP).*"
+                }
+            ]
+        };
+        
+        IOptions<RSSFilterOptions> options = Options.Create(tagCleanupOptions);
+        
+        FileLoggerFactory loggerFactory = new FileLoggerFactory(_loggerOptions);
+        RSSFeedUpdate feedUpdate = new RSSFeedUpdate(loggerFactory);
+        TestableRSSMonitorService monitorService = new TestableRSSMonitorService(feedUpdate, options, loggerFactory);
+
+        // Set up a test RSS feed with content for cleanup
+        string testFeed = @"
+            <rss version='2.0'>
+                <channel>
+                    <title>Test Cleanup Feed</title>
+                    <item>
+                        <title>Show Name</title>
+                        <description>A great episode 720p RERIP x264</description>
+                    </item>
+                    <item>
+                        <title>Another Show</title>
+                        <description>Another description 1080p HDTV</description>
+                    </item>
+                </channel>
+            </rss>";
+
+        monitorService.SetupTestRssFeed(testFeed);
+
+        // Act
+        await monitorService.TestSingleProcessingCycle(CancellationToken.None);
+        string processedFeed = feedUpdate.GetLatestFeed();
+
+        // Assert
+        Assert.NotEmpty(processedFeed);
+        
+        // Check that the cleanup pattern was applied to descriptions
+        Assert.Contains("<description>A great episode</description>", processedFeed);
+        Assert.Contains("<description>Another description</description>", processedFeed);
     }
 
     [Fact]

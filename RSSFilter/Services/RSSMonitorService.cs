@@ -255,18 +255,113 @@ public class RSSMonitorService : BackgroundService
 
     private void CleanupTagContent(XDocument xmlDoc)
     {
-        // Process each tag cleanup setting
-        foreach (var tagSetting in _options.TagCleanupSettings)
+        // Process TagSplit settings
+        if (_options.TagSplit != null && _options.TagSplit.Length > 0)
         {
-            // Find all elements with the specified tag name
-            foreach (XElement element in xmlDoc.Descendants()
-                .Where(e => e.Name.LocalName == tagSetting.TagName && !string.IsNullOrEmpty(e.Value)))
+            foreach (TagSplitOptions splitSetting in _options.TagSplit)
             {
-                // Apply the regex pattern to clean up the element's value
-                element.Value = Regex.Replace(element.Value, tagSetting.CleanupPattern, string.Empty);
+                if (string.IsNullOrWhiteSpace(splitSetting.TagName) || 
+                    string.IsNullOrWhiteSpace(splitSetting.SplitPattern) || 
+                    splitSetting.NewTags == null || 
+                    splitSetting.NewTags.Count == 0)
+                {
+                    continue;
+                }
+
+                // Find all elements with the specified tag name
+                Regex regex = new Regex(splitSetting.SplitPattern);
+                List<XElement> elements = xmlDoc.Descendants().Where(e => e.Name.LocalName == splitSetting.TagName).ToList();
+
+                foreach (XElement element in elements)
+                {
+                    string originalValue = element.Value;
+                    
+                    if (string.IsNullOrEmpty(originalValue))
+                    {
+                        continue;
+                    }
+
+                    // Try to match the pattern with 2 capture groups
+                    Match match = regex.Match(originalValue);
+
+                    if (match.Success && match.Groups.Count >= 3)
+                    {
+                        // Get the parent element
+                        XElement parent = element.Parent;
+
+                        if (parent != null)
+                        {
+                            // For each tag name in the NewTags dictionary, create or update elements
+                            foreach (KeyValuePair<string, string> tagMapping in splitSetting.NewTags)
+                            {
+                                string newTagName = tagMapping.Key;
+                                string valuePattern = tagMapping.Value;
+                                
+                                // Replace $1, $2 with the capture group values
+                                string newValue = valuePattern
+                                    .Replace("$1", match.Groups[1].Value)
+                                    .Replace("$2", match.Groups[2].Value);
+
+                                // Check if the tag already exists as a direct child of the parent
+                                XElement existingTag = parent.Elements()
+                                    .FirstOrDefault(e => e.Name.LocalName == newTagName);
+
+                                // If the tag already exists, update its value; otherwise, create a new one
+                                if (existingTag != null)
+                                {
+                                    existingTag.Value = newValue.Trim();
+                                }
+                                else
+                                {
+                                    // If the element we're updating is the original tag, update it directly
+                                    // rather than creating a duplicate
+                                    if (newTagName == splitSetting.TagName)
+                                    {
+                                        element.Value = newValue.Trim();
+                                    }
+                                    else
+                                    {
+                                        // Create a new element with the same namespace as the parent
+                                        XElement newElement = new XElement(parent.Name.Namespace + newTagName, newValue);
+                                        
+                                        // Add it after the current element
+                                        element.AddAfterSelf(newElement);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
+            
+            _logger.Log($"Processed tag splitting for {_options.TagSplit.Length} tag types");
         }
 
-        _logger.Log($"Cleaned up content for {_options.TagCleanupSettings.Length} tag types");
+        // Process TagCleanup settings
+        if (_options.TagCleanup != null && _options.TagCleanup.Length > 0)
+        {
+            foreach (TagCleanupOptions tagSetting in _options.TagCleanup)
+            {
+                if (string.IsNullOrEmpty(tagSetting.TagName) || string.IsNullOrEmpty(tagSetting.CleanupPattern))
+                {
+                    continue;
+                }
+
+                // Find all elements with the specified tag name
+                foreach (XElement element in xmlDoc.Descendants()
+                    .Where(e => e.Name.LocalName == tagSetting.TagName && !string.IsNullOrEmpty(e.Value)))
+                {
+                    string originalValue = element.Value;
+                    
+                    // Apply cleanup pattern
+                    string processedValue = Regex.Replace(originalValue, tagSetting.CleanupPattern, string.Empty);
+                    
+                    // Update the element value
+                    element.Value = processedValue.Trim();
+                }
+            }
+            
+            _logger.Log($"Cleaned up content for {_options.TagCleanup.Length} tag types");
+        }
     }
 }

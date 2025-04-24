@@ -3,8 +3,10 @@ namespace RSSFilter.Models;
 public class RSSFilterOptions
 {
     public string InputSource { get; set; }
-    public string[] TagsToRemove { get; set; }
+    public string[] TagsToRemove { get; set; } = [];
     public bool CleanupTags { get; set; } = false;
+    
+    // These TagCleanupSettings are kept for backward compatibility
     public TagCleanupOptions[] TagCleanupSettings { get; set; } = 
     [
         new TagCleanupOptions
@@ -18,4 +20,8 @@ public class RSSFilterOptions
             CleanupPattern = @"\s\d{3,4}p.*"
         }
     ];
+    
+    // New settings structure
+    public TagSplitOptions[] TagSplit { get; set; } = [];
+    public TagCleanupOptions[] TagCleanup { get; set; } = [];
 }

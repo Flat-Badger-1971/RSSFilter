@@ -32,13 +32,14 @@ internal class Program
             services.Configure<LoggerOptions>(config.GetSection("Logger"));
 
             // Register logger factory
-            services.AddSingleton<FileLoggerFactory>();
+            services.AddSingleton<IFileLoggerFactory, FileLoggerFactory>();
 
             // Register the RSS publisher as a singleton
             services.AddSingleton<RSSFeedUpdate>();
 
-            // Register the RSS monitor service
-            services.AddHostedService<RSSMonitorService>();
+            // Register the RSS monitor service both as concrete type and as hosted service
+            services.AddSingleton<RSSMonitorService>();
+            services.AddHostedService(sp => sp.GetRequiredService<RSSMonitorService>());
         })
         .ConfigureWebHostDefaults(webBuilder =>
         {
@@ -50,7 +51,7 @@ internal class Program
                 listeningPort = parsedPort;
             }
 
-            webBuilder.UseUrls($"http://localhost:{listeningPort}");
+            webBuilder.UseUrls($"http://0.0.0.0:{listeningPort}");
 
             webBuilder.Configure(app =>
             {

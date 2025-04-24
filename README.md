@@ -1,10 +1,11 @@
 # RSSFilter
 
-RSSFilter is a .NET application that fetches, filters, and serves customized RSS feeds. It allows you to remove unwanted elements from RSS feeds and clean up content using regular expressions before making the feed available through a web endpoint.
+RSSFilter is a .NET application that fetches, filters, and serves customized RSS feeds. It allows you to remove unwanted elements from RSS feeds, split and transform tag content using regular expressions before making the feed available through a web endpoint.
 
 ## Features
 
 - **RSS Feed Filtering**: Remove specified XML tags from RSS feeds
+- **Tag Splitting**: Split tag content into multiple tags using regex capture groups
 - **Content Cleanup**: Clean up feed content using configurable regex patterns
 - **Web API**: Access the filtered feed via HTTP endpoints
 - **Automatic Updates**: Periodically polls the source feed for updates
@@ -41,16 +42,27 @@ Configuration is managed through the `appsettings.json` file. Here's an overview
 
 ### RSS Filter Options (`RSSFilter` section)
 
-| Setting              | Description                                    | Default   |
-| -------------------- | ---------------------------------------------- | --------- |
-| `InputSource`        | URL of the source RSS feed                     | Required  |
-| `TagsToRemove`       | Array of XML tag names to remove from the feed | `[ ]`     |
-| `CleanupTags`        | Enable/disable tag content cleanup             | `false`   |
-| `TagCleanupSettings` | Array of tag cleanup configurations            | See below |
+| Setting        | Description                                    | Default  |
+| -------------- | ---------------------------------------------- | -------- |
+| `InputSource`  | URL of the source RSS feed                     | Required |
+| `TagsToRemove` | Array of XML tag names to remove from the feed | `[ ]`    |
+| `CleanupTags`  | Enable/disable tag content processing          | `false`  |
+| `TagSplit`     | Array of tag splitting configurations          | `[ ]`    |
+| `TagCleanup`   | Array of tag cleanup configurations            | `[ ]`    |
+
+#### Tag Split Settings
+
+Each entry in `TagSplit` contains:
+
+| Setting        | Description                                                           |
+| -------------- | --------------------------------------------------------------------- |
+| `TagName`      | Name of the XML tag to split                                          |
+| `SplitPattern` | Regular expression pattern with two capture groups to extract content |
+| `NewTags`      | Dictionary of tag names and patterns using $1 and $2 for replacements |
 
 #### Tag Cleanup Settings
 
-Each entry in `TagCleanupSettings` contains:
+Each entry in `TagCleanup` contains:
 
 | Setting          | Description                                                 |
 | ---------------- | ----------------------------------------------------------- |
@@ -72,16 +84,28 @@ Each entry in `TagCleanupSettings` contains:
   "Port": "5000",
   "RSSFilter": {
     "InputSource": "https://example.com/feed.rss",
-    "TagsToRemove": ["link", "tv:data_source", "enclosure", "media:content"],
+    "TagsToRemove": [
+      "link",
+      "tv:data_source",
+      "enclosure",
+      "media:content",
+      "description"
+    ],
     "CleanupTags": true,
-    "TagCleanupSettings": [
+    "TagSplit": [
       {
         "TagName": "title",
-        "CleanupPattern": "\\sS\\d{2}E\\d{2}.*"
-      },
+        "SplitPattern": "(.+S\\d{2}(?:E\\d{2})?)\\s(.+)",
+        "NewTags": {
+          "title": "$1",
+          "description": "$2"
+        }
+      }
+    ],
+    "TagCleanup": [
       {
         "TagName": "description",
-        "CleanupPattern": "\\s\\d{3,4}p.*"
+        "CleanupPattern": "\\s(?:\\d{3,4}p)|(?:RERIP).*"
       }
     ]
   },
@@ -103,8 +127,9 @@ Each entry in `TagCleanupSettings` contains:
 ## Use Cases
 
 - Remove unnecessary tags like media enclosures from podcast feeds
-- Clean up episode titles by removing season/episode identifiers
-- Remove quality descriptors from episode descriptions
+- Split episode information into separate tags (title and description)
+- Extract season and episode numbers into dedicated tags
+- Clean up episode descriptions by removing quality descriptors
 - Simplify RSS feeds for better compatibility with basic RSS readers
 
 ## License

@@ -1,4 +1,5 @@
 using RSSFilter.Models;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace RSSFilter.Tests.Models;
@@ -24,25 +25,42 @@ public class RSSFilterOptionsTests
         TagCleanupOptions descriptionCleanup = options.TagCleanupSettings.FirstOrDefault(t => t.TagName == "description");
         Assert.NotNull(descriptionCleanup);
         Assert.Equal(@"\s\d{3,4}p.*", descriptionCleanup.CleanupPattern);
+        
+        // Check new properties
+        Assert.NotNull(options.TagSplit);
+        Assert.Empty(options.TagSplit);
+        Assert.NotNull(options.TagCleanup);
+        Assert.Empty(options.TagCleanup);
     }
     
     [Fact]
     public void RSSFilterOptions_CustomValues_ShouldBeSet()
     {
         // Arrange & Act
+        var tagSplit = new TagSplitOptions
+        {
+            TagName = "title",
+            SplitPattern = @"(.+S\d{2}(?:E\d{2})?)\\s(.+)",
+            NewTags = new Dictionary<string, string>
+            {
+                { "title", "$1" },
+                { "description", "$2" }
+            }
+        };
+        
+        var tagCleanup = new TagCleanupOptions
+        {
+            TagName = "description",
+            CleanupPattern = @"\s(?:\d{3,4}p)|(?:RERIP).*"
+        };
+        
         RSSFilterOptions options = new RSSFilterOptions
         {
             InputSource = "http://test.com/feed.xml",
             TagsToRemove = ["guid", "pubDate"],
             CleanupTags = true,
-            TagCleanupSettings =
-            [
-                new TagCleanupOptions
-                {
-                    TagName = "custom",
-                    CleanupPattern = "pattern"
-                }
-            ]
+            TagSplit = [tagSplit],
+            TagCleanup = [tagCleanup]
         };
         
         // Assert
@@ -51,8 +69,16 @@ public class RSSFilterOptionsTests
         Assert.Contains("guid", options.TagsToRemove);
         Assert.Contains("pubDate", options.TagsToRemove);
         Assert.True(options.CleanupTags);
-        Assert.Single(options.TagCleanupSettings);
-        Assert.Equal("custom", options.TagCleanupSettings[0].TagName);
-        Assert.Equal("pattern", options.TagCleanupSettings[0].CleanupPattern);
+        
+        // Check TagSplit settings
+        Assert.Single(options.TagSplit);
+        Assert.Equal("title", options.TagSplit[0].TagName);
+        Assert.Equal(@"(.+S\d{2}(?:E\d{2})?)\\s(.+)", options.TagSplit[0].SplitPattern);
+        Assert.Equal(2, options.TagSplit[0].NewTags.Count);
+        
+        // Check TagCleanup settings
+        Assert.Single(options.TagCleanup);
+        Assert.Equal("description", options.TagCleanup[0].TagName);
+        Assert.Equal(@"\s(?:\d{3,4}p)|(?:RERIP).*", options.TagCleanup[0].CleanupPattern);
     }
 }
