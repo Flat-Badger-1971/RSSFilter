@@ -1,0 +1,32 @@
+The folder structure for the application should match:
+ 
+/src
+/test
+    /unit  
+    /integration
+    /functional
+ 
+The solution file (.sln) should live in the root of the repository
+Follow the code styling guide based on ./code-style.md
+Provide comprehensive guidance and best practices for developing reusable components following SOLID and DRY principals.
+The code should follow clean architecture as a structure
+Avoid using third party dependencies as much as possible
+Incorporate preferred safe deployment practices, including effective management of feature flags using Azure, and provide recommendations for when and how to use them effectively. Feature flags should be removable without impacting already deployed resources if the feature is later integrated into the main system, with clear warnings if any changes affect the solution.
+Unit tests should have the naming convention Method_Scenario_Expectation
+Unit tests should be written in xUnit
+NSubstitute should be used for the mocking framework for any depedency calls
+Integration tests should use testcontainers and not have any reference to NSubstitute
+Functional tests should be added and should ensure the end to end functionality is working
+ 
+Additionally, provide relevant guidance on:
+ 
+* Infrastructure testing and validation techniques.
+* Documentation best practices.
+* Error handling and logging mechanisms.
+* Version control strategies.
+* Configuration management approaches.
+* Security best practices tailored for Azure.
+* Cost management strategies for Azure resources.
+* Establishing a change management process for IaC updates.
+* Integrating monitoring and alerting for deployed resources.
+* Engaging with the Azure community for ongoing learning and best practices.
